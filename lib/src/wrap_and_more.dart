@@ -54,6 +54,21 @@ class WrapAndMore extends StatelessWidget {
   /// The list of widgets to display within the Wrap.
   final List<Widget> children;
 
+  /// How the children within a run should be placed in the main axis.
+  ///
+  /// For example, if [alignment] is [WrapAlignment.center], the children in
+  /// each run are grouped together in the center of their run in the main axis.
+  ///
+  /// Defaults to [WrapAlignment.start].
+  ///
+  /// See also:
+  ///
+  ///  * [runAlignment], which controls how the runs are placed relative to each
+  ///    other in the cross axis.
+  ///  * [crossAxisAlignment], which controls how the children within each run
+  ///    are placed relative to each other in the cross axis.
+  final WrapAlignment alignment;
+
   /// Creates a WrapAndMore widget.
   ///
   /// The `maxRow` parameter specifies the maximum number of rows to display
@@ -72,6 +87,7 @@ class WrapAndMore extends StatelessWidget {
     this.runSpacing = 0.0,
     required this.overflowWidget,
     required this.children,
+    this.alignment = WrapAlignment.end,
   }) : super(key: key);
 
   @override
@@ -96,6 +112,7 @@ class WrapAndMore extends StatelessWidget {
                 child: Wrap(
                   spacing: spacing,
                   runSpacing: runSpacing,
+                  alignment: alignment,
                   children: controller.isRendered.value
                       ? [
                           ...children
