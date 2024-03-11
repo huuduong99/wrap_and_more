@@ -37,7 +37,7 @@ part of wrap_and_more;
 ///   ],
 /// )
 /// ```
-class WrapAndMore extends StatefulWidget {
+class WrapAndMore extends StatelessWidget {
   /// The maximum number of rows to show within the Wrap.
   final int maxRow;
 
@@ -91,63 +91,40 @@ class WrapAndMore extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<WrapAndMore> createState() => _WrapAndMoreState();
-}
-
-class _WrapAndMoreState extends State<WrapAndMore> {
-  final WrapAndMoreController _controller = WrapAndMoreController();
-
-  final GlobalKey _rowKey = GlobalKey();
-
-  @override
-  void initState() {
-    _controller.initData(
-      children: widget.children,
-      key: _rowKey,
-      maxRow: widget.maxRow,
-      spacing: widget.spacing,
-    );
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final GlobalKey rowKey = GlobalKey();
     return GetBuilder(
-      key: ObjectKey(widget.children),
-      init: _controller,
+      key: ObjectKey(children),
+      init: WrapAndMoreController()
+        ..initData(
+            children: children, key: rowKey, maxRow: maxRow, spacing: spacing),
       builder: (controller) {
         return Obx(() {
           if (controller.isCounted.value) {
             return MeasureSize(
               onChange: (size) {
                 controller.updateWrapArea(size);
-                widget.overflowWidget(controller.showChildCount.value);
+                overflowWidget(controller.showChildCount.value);
               },
               child: SizedBox(
-                height: (controller.overflowSize.height * widget.maxRow) +
-                    (widget.runSpacing * (widget.maxRow - 1)),
+                height: (controller.overflowSize.height * maxRow) +
+                    (runSpacing * (maxRow - 1)),
                 child: Wrap(
-                  spacing: widget.spacing,
-                  runSpacing: widget.runSpacing,
-                  alignment: widget.alignment,
+                  spacing: spacing,
+                  runSpacing: runSpacing,
+                  alignment: alignment,
                   children: controller.isRendered.value
                       ? [
-                          ...widget.children
+                          ...children
                               .take(controller.showChildCount.value)
                               .toList(),
-                          if (widget.children.length -
+                          if (children.length -
                                   controller.showChildCount.value >
                               0)
-                            widget.overflowWidget(widget.children.length -
+                            overflowWidget(children.length -
                                 controller.showChildCount.value)
                         ]
-                      : widget.children.toList(),
+                      : children.toList(),
                 ),
               ),
             );
@@ -157,9 +134,9 @@ class _WrapAndMoreState extends State<WrapAndMore> {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                key: _rowKey,
+                key: rowKey,
                 children: [
-                  ...widget.children
+                  ...children
                       .asMap()
                       .map((index, Widget value) {
                         return MapEntry(
@@ -174,7 +151,7 @@ class _WrapAndMoreState extends State<WrapAndMore> {
                       .values
                       .toList(),
                   MeasureSize(
-                    child: widget.overflowWidget(0),
+                    child: overflowWidget(0),
                     onChange: (p0) {
                       controller.updateOverflowSize(p0);
                     },
