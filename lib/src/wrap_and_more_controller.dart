@@ -1,126 +1,128 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:collection/collection.dart';
-import 'package:wrap_and_more/src/collection_extension.dart';
 
-/// A controller class that manages the logic for the `WrapAndMore` widget.
-/// The `WrapAndMoreController` extends GetX's GetxController to handle reactive state management.
+/// Controller that handles the logic for calculating the number of child widgets to display,
+/// checking for overflow, and notifying the UI to update.
 class WrapAndMoreController extends ChangeNotifier {
-  /// A flag to determine whether the count of children has been calculated.
+  final int maxRow;
+  final double spacing;
+  final double runSpacing;
+  final int childrenCount;
+
+  /// Key to measure the initial Row
+  final GlobalKey rowKey = GlobalKey();
+
+  /// List of sizes for each child widget
+  late List<Size> _childrenSizes;
+
+  /// Size of the overflow widget
+  Size _overflowSize = Size.zero;
+
   bool _isCounted = false;
-
-  /// A flag to determine whether the widget has been rendered.
   bool _isRendered = false;
-
-  /// The key associated with the row widget to measure its size.
-  late GlobalKey _rowKey;
-
-  /// The size of a single child widget in the `Wrap`.
-  late Size _childSize;
-
-  /// A list that stores the area (width * height) of each child widget in the `Wrap`.
-  late List<double> _childrenArea;
-
-  /// The total area of the `Wrap`.
-  double _areaWrap = 0;
-
-  /// The number of child widgets to display within the `Wrap`.
   int _showChildCount = 0;
+  double rowHeight = 0;
+  double _maxWidth = 0;
+  bool _hasOverflow = false;
 
-  /// The maximum number of rows to show within the `Wrap`.
-  int _maxRowChild = 0;
-
-  /// The spacing between children in the `Wrap`.
-  double _spacingChild = 0;
-
-  /// The size of the overflow widget.
-  late Size _overflowSize;
-
+  /// Whether the number of children has been calculated
   bool get isCounted => _isCounted;
 
+  /// Whether the Row has been rendered for measurement
   bool get isRendered => _isRendered;
 
-  GlobalKey get rowKey => _rowKey;
-
+  /// Number of child widgets to display
   int get showChildCount => _showChildCount;
 
-  Size get overflowSize => _overflowSize;
+  /// Whether there is overflow (display the overflow widget)
+  bool get hasOverflow => _hasOverflow;
 
-  /// Initializes the controller with necessary data for calculation.
-  /// This method should be called before using the controller.
-  void initData({
-    required List<Widget> children,
-    required GlobalKey key,
-    required int maxRow,
-    required double spacing,
+  /// Maximum width of the Wrap
+  double get maxWidth => _maxWidth;
+
+  WrapAndMoreController({
+    required this.maxRow,
+    required this.spacing,
+    required this.runSpacing,
+    required this.childrenCount,
   }) {
-    _rowKey = key;
-    _maxRowChild = maxRow;
-    _spacingChild = spacing;
-    _childrenArea = List.generate(children.length, (index) => 0);
+    _childrenSizes = List.filled(childrenCount, Size.zero);
   }
 
-  /// Retrieves the size and position of the row widget.
-  /// This method is called when the widget is ready.
-  void getSizeAndPosition() {
-    _isRendered = false;
-    _childSize = _rowKey.currentContext?.size ?? Size.zero;
-    _isCounted = true;
-    notifyListeners();
+  /// Update the size of each child widget after measurement
+  void updateChildrenSize(int index, Size size) {
+    _childrenSizes[index] = size;
+    _calculateVisibleChildren();
   }
 
-  /// Updates the size of a child widget at a given index in the `Wrap`.
-  void updateChildrenSize(int index, Size value) {
-    _childrenArea.replace((value.width + _spacingChild) * value.height, index);
+  /// Update the size of the overflow widget after measurement
+  void updateOverflowSize(Size size) {
+    _overflowSize = size;
+    _calculateVisibleChildren();
   }
 
-  /// Updates the size of the overflow widget.
-  void updateOverflowSize(Size value) {
-    _overflowSize = value;
-    notifyListeners();
+  /// Update the maximum width from the LayoutBuilder
+  void updateMaxWidth(double maxWidth) {
+    if (_maxWidth != maxWidth) {
+      _maxWidth = maxWidth;
+      _calculateVisibleChildren();
+    }
   }
 
-  /// Updates the total area of the `Wrap`.
-  void updateWrapArea(Size size) {
-    _areaWrap = size.width * size.height;
-    _countChildWidgetShow();
-    notifyListeners();
-  }
+  /// Calculate the number of child widgets that can be displayed within maxRow,
+  /// and check if the overflow widget needs to be displayed.
+  void _calculateVisibleChildren() {
+    // Wait until all child and overflow sizes are measured
+    if (_maxWidth == 0 ||
+        _childrenSizes.contains(Size.zero) ||
+        _overflowSize == Size.zero) {
+      return;
+    }
 
-  /// Calculates the number of child widgets to display within the `Wrap`.
-  void _countChildWidgetShow() {
-    final List<double> listOfTempArea =
-    List.generate(_maxRowChild, (index) => _areaWrap / _maxRowChild);
+    double currentRowWidth = 0;
+    int currentRow = 1;
+    int count = 0;
+    double maxHeightPerRow = 0;
+    _hasOverflow = false;
 
-    int indexOfTempArea = 0;
-    int showAreaCount = 0;
+    for (var size in _childrenSizes) {
+      if (currentRow > maxRow) break;
 
-    final List<double> listAreaOfLastChild = [];
-
-    for (int i = 0; i < listOfTempArea.length; i++) {
-      while (indexOfTempArea + 1 < _childrenArea.length) {
-        listOfTempArea[i] = listOfTempArea[i] - _childrenArea[indexOfTempArea];
-        if (i == listOfTempArea.length - 1) {
-          listAreaOfLastChild.add(_childrenArea[indexOfTempArea]);
-        }
-        showAreaCount++;
-        if (listOfTempArea[i] < _childrenArea[indexOfTempArea + 1] ||
-            listOfTempArea.length == _childrenArea.length) {
-          indexOfTempArea++;
-          break;
-        }
-        indexOfTempArea++;
+      // If the child widget exceeds the width, move to the next row
+      if (currentRowWidth + size.width > _maxWidth) {
+        currentRow++;
+        if (currentRow > maxRow) break;
+        currentRowWidth = 0;
       }
+
+      currentRowWidth += size.width + spacing;
+      maxHeightPerRow = max(maxHeightPerRow, size.height);
+      count++;
     }
 
-    final double lastRowArea =
-        listAreaOfLastChild.sum + (_overflowSize.width * _overflowSize.height);
-
-    if (lastRowArea >= listOfTempArea.last) {
-      showAreaCount--;
-    } else {
-      showAreaCount++;
+    // Check the overflow widget
+    if (count < childrenCount) {
+      if (currentRowWidth + _overflowSize.width > _maxWidth) {
+        // If the overflow widget does not fit in the current row
+        if (currentRow < maxRow) {
+          currentRow++;
+          if (currentRow <= maxRow) {
+            currentRowWidth = _overflowSize.width + spacing;
+          } else {
+            count--; // Move back 1 child widget to make room for overflow
+          }
+        } else {
+          count--;
+        }
+      } else {
+        currentRowWidth += _overflowSize.width + spacing;
+      }
+      _hasOverflow = true;
     }
-    _showChildCount = showAreaCount;
+
+    rowHeight = maxHeightPerRow;
+    _showChildCount = count;
+    _isCounted = true;
     _isRendered = true;
     notifyListeners();
   }

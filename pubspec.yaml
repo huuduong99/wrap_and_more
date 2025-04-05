@@ -14,7 +14,6 @@ dependencies:
   flutter:
     sdk: flutter
   provider: ^6.1.2
-  measure_size: ^4.0.0
 
 dev_dependencies:
   flutter_lints: ^2.0.0

@@ -38,57 +38,33 @@ part of wrap_and_more;
 /// )
 /// ```
 class WrapAndMore extends StatefulWidget {
-  /// The maximum number of rows to show within the Wrap.
-  final int maxRow;
-
-  /// The spacing between children in the Wrap.
-  final double spacing;
-
-  /// The run spacing between rows of children in the Wrap.
-  final double runSpacing;
-
-  /// A function that takes the number of remaining children beyond `maxRow`
-  /// as input and returns a widget to represent the "overflow" children.
-  final Widget Function(int restChildrenCount) overflowWidget;
-
-  /// The list of widgets to display within the Wrap.
-  final List<Widget> children;
-
-  /// How the children within a run should be placed in the main axis.
-  ///
-  /// For example, if [alignment] is [WrapAlignment.center], the children in
-  /// each run are grouped together in the center of their run in the main axis.
-  ///
-  /// Defaults to [WrapAlignment.start].
-  ///
-  /// See also:
-  ///
-  ///  * [runAlignment], which controls how the runs are placed relative to each
-  ///    other in the cross axis.
-  ///  * [crossAxisAlignment], which controls how the children within each run
-  ///    are placed relative to each other in the cross axis.
-  final WrapAlignment alignment;
-
-  /// Creates a WrapAndMore widget.
-  ///
-  /// The `maxRow` parameter specifies the maximum number of rows to display
-  /// in the Wrap. The `spacing` and `runSpacing` parameters control the
-  /// spacing between children in the Wrap.
-  ///
-  /// The `overflowWidget` parameter is a function that takes an integer as
-  /// input, representing the number of remaining children beyond the `maxRow`,
-  /// and returns a widget to display as the "overflow" representation.
-  ///
-  /// The `children` parameter is a list of widgets to display within the Wrap.
   const WrapAndMore({
-    Key? key,
     required this.maxRow,
-    this.spacing = 0.0,
-    this.runSpacing = 0.0,
     required this.overflowWidget,
     required this.children,
+    this.spacing = 4.0,
+    this.runSpacing = 4.0,
     this.alignment = WrapAlignment.end,
-  }) : super(key: key);
+    super.key,
+  });
+
+  /// The list of child widgets to display in the Wrap.
+  final List<Widget> children;
+
+  /// The maximum number of rows to display in the Wrap.
+  final int maxRow;
+
+  /// The spacing between child widgets in the Wrap.
+  final double spacing;
+
+  /// The spacing between rows in the Wrap.
+  final double runSpacing;
+
+  /// Widget to display when the number of children exceeds the limit
+  final Widget Function(int restChildrenCount) overflowWidget;
+
+  /// Alignment of child widgets within each row
+  final WrapAlignment alignment;
 
   @override
   State<WrapAndMore> createState() => _WrapAndMoreState();
@@ -96,20 +72,32 @@ class WrapAndMore extends StatefulWidget {
 
 class _WrapAndMoreState extends State<WrapAndMore> {
   late WrapAndMoreController _controller;
-  final GlobalKey _rowKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
-    _controller = WrapAndMoreController();
-    _controller.initData(
-      children: widget.children,
+    _initController();
+  }
+
+  /// Check and update the controller when the widget changes
+  @override
+  void didUpdateWidget(covariant WrapAndMore oldWidget) {
+    if (widget.maxRow != oldWidget.maxRow ||
+        widget.spacing != oldWidget.spacing ||
+        widget.runSpacing != oldWidget.runSpacing ||
+        widget.children.length != oldWidget.children.length) {
+      _initController();
+    }
+    super.didUpdateWidget(oldWidget);
+  }
+
+  /// Initialize the controller
+  void _initController() {
+    _controller = WrapAndMoreController(
       maxRow: widget.maxRow,
       spacing: widget.spacing,
-      key: _rowKey,
-    );
-    WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _controller.getSizeAndPosition(),
+      runSpacing: widget.runSpacing,
+      childrenCount: widget.children.length,
     );
   }
 
@@ -121,71 +109,62 @@ class _WrapAndMoreState extends State<WrapAndMore> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<WrapAndMoreController>.value(
-      value: _controller,
-      child: Builder(
-        builder: (context) {
-          final controller = context.watch<WrapAndMoreController>();
-          if (controller.isCounted) {
-            return MeasureSize(
-              onChange: (size) {
-                controller.updateWrapArea(size);
-                widget.overflowWidget(controller.showChildCount);
-              },
-              child: SizedBox(
-                height: (controller.overflowSize.height * widget.maxRow) +
-                    (widget.runSpacing * (widget.maxRow - 1)),
-                child: Wrap(
-                  spacing: widget.spacing,
-                  runSpacing: widget.runSpacing,
-                  alignment: widget.alignment,
-                  children: controller.isRendered
-                      ? [
-                    ...widget.children.take(controller.showChildCount),
-                    if (widget.children.length -
-                        controller.showChildCount >
-                        0)
-                      widget.overflowWidget(
-                        widget.children.length -
-                            controller.showChildCount,
-                      ),
-                  ]
-                      : widget.children.toList(),
-                ),
-              ),
-            );
-          } else {
-            return SizedBox(
-              width: 100,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  key: controller.rowKey,
-                  children: [
-                    ...widget.children.asMap().map((index, Widget value) {
-                      return MapEntry(
-                        index,
-                        MeasureSize(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Update the maximum width
+        _controller.updateMaxWidth(constraints.maxWidth);
+        return ChangeNotifierProvider<WrapAndMoreController>.value(
+          value: _controller,
+          child: Consumer<WrapAndMoreController>(
+            builder: (context, controller, child) {
+              // When the number of children to display has been calculated
+              if (controller.isCounted) {
+                return SizedBox(
+                  width: constraints.maxWidth,
+                  child: Wrap(
+                    spacing: widget.spacing,
+                    runSpacing: widget.runSpacing,
+                    alignment: widget.alignment,
+                    children: [
+                      // Display the children that fit within maxRow
+                      ...widget.children.take(controller.showChildCount),
+                      // Display the overflow widget if there is overflow
+                      if (controller.hasOverflow)
+                        widget.overflowWidget(
+                          widget.children.length - controller.showChildCount,
+                        ),
+                    ],
+                  ),
+                );
+              } else {
+                // Measure the size of the child widgets and the overflow widget
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    key: controller.rowKey,
+                    children: [
+                      ...List.generate(widget.children.length, (index) {
+                        return MeasureSize(
                           onChange: (Size size) {
                             controller.updateChildrenSize(index, size);
                           },
-                          child: value,
-                        ),
-                      );
-                    }).values,
-                    MeasureSize(
-                      child: widget.overflowWidget(0),
-                      onChange: (p0) {
-                        controller.updateOverflowSize(p0);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-        },
-      ),
+                          child: widget.children[index],
+                        );
+                      }),
+                      MeasureSize(
+                        child: widget.overflowWidget(0),
+                        onChange: (size) {
+                          controller.updateOverflowSize(size);
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              }
+            },
+          ),
+        );
+      },
     );
   }
 }
